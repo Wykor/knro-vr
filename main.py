@@ -58,7 +58,8 @@ class GreenScreenVR:
         
         # Set window positions - info window on side screen
         cv2.moveWindow(self.win_name, 100, 100)
-        cv2.moveWindow(self.info_win, self.screen_width + 100, 100)
+        # Position info window on main screen first, then you can drag it
+        cv2.moveWindow(self.info_win, 800, 100)
         
     def _get_background_paths(self, initial_path):
         """Get list of background image paths."""
