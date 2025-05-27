@@ -174,7 +174,7 @@ class GreenScreenVR:
             f"Fullscreen: {'ON' if self.full_screen else 'OFF'}",
             f"Background: {current_bg_name} ({self.current_bg_index + 1}/{len(self.background_paths)})",
             f"Photos Captured: {self.photo_count} (Session: {os.path.basename(self.session_folder)})",
-            "'g' toggle, 'f' fullscreen, 'b' background, 'c' photo, 'q' quit",
+            "'g' toggle, 'f' fullscreen, 'b' background, 'c' photo, 'q'/ESC quit",
         ]
         y0, dy = 30, 30
         for i, text in enumerate(text_lines):
@@ -230,23 +230,26 @@ class GreenScreenVR:
                 cv2.imshow(self.win_name, display_frame)
                 cv2.imshow(self.info_win, info)
 
-                # Check for key presses on both windows
-                key = cv2.waitKey(30) & 0xFF
+                # Capture keys with longer timeout for better responsiveness
+                key = cv2.waitKey(50) & 0xFF
                 
-                # Also check if any window has focus and capture key from both
-                if key == 255:  # No key pressed, try checking window focus
-                    cv2.setWindowProperty(self.info_win, cv2.WND_PROP_TOPMOST, 1)
-                    cv2.setWindowProperty(self.info_win, cv2.WND_PROP_TOPMOST, 0)
-                    key = cv2.waitKey(1) & 0xFF
-                if key == ord('g'):
+                # Handle key presses - print for debugging
+                if key != 255:  # A key was pressed
+                    print(f"Key pressed: {key} ('{chr(key) if 32 <= key <= 126 else '?'}')")
+                
+                if key == ord('g') or key == ord('G'):
                     self.toggle_green_screen()
-                elif key == ord('f'):
+                    print("Toggled green screen")
+                elif key == ord('f') or key == ord('F'):
                     self.toggle_full_screen()
-                elif key == ord('b'):
+                    print("Toggled fullscreen")
+                elif key == ord('b') or key == ord('B'):
                     self.switch_background()
-                elif key == ord('c'):
+                    print("Switched background")
+                elif key == ord('c') or key == ord('C'):
                     self.take_photo(processed)
-                elif key == ord('q'):
+                elif key == ord('q') or key == ord('Q') or key == 27:  # ESC key
+                    print("Quitting...")
                     break
         finally:
             self.cap.release()
