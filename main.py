@@ -185,14 +185,15 @@ class GreenScreenVR:
                         
         # Display captured photo in corner if it exists
         if self.captured_photo is not None:
-            _, w = info_frame.shape[:2]
+            h, w = info_frame.shape[:2]
             photo_size = 150
             photo_resized = cv2.resize(self.captured_photo, (photo_size, photo_size))
             x_offset = w - photo_size - 10
             y_offset = 10
-            info_frame[y_offset:y_offset + photo_size, x_offset:x_offset + photo_size] = photo_resized
-            cv2.rectangle(info_frame, (x_offset-2, y_offset-2), 
-                         (x_offset + photo_size + 2, y_offset + photo_size + 2), (255, 255, 255), 2)
+            if x_offset > 0 and y_offset + photo_size < h:  # Ensure photo fits
+                info_frame[y_offset:y_offset + photo_size, x_offset:x_offset + photo_size] = photo_resized
+                cv2.rectangle(info_frame, (x_offset-2, y_offset-2), 
+                             (x_offset + photo_size + 2, y_offset + photo_size + 2), (255, 255, 255), 2)
                         
         return info_frame
 
@@ -227,6 +228,12 @@ class GreenScreenVR:
                     display_frame = processed
 
                 info = self.overlay_info(processed)
+                
+                # Debug info window
+                if info is None:
+                    print("Warning: info frame is None")
+                else:
+                    print(f"Info frame shape: {info.shape}")
 
                 cv2.imshow(self.win_name, display_frame)
                 cv2.imshow(self.info_win, info)
