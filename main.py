@@ -53,8 +53,12 @@ class GreenScreenVR:
         # Window setup
         self.win_name = "Video"
         self.info_win = "Info"
-        cv2.namedWindow(self.win_name, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.info_win, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(self.win_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.namedWindow(self.info_win, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        
+        # Set window positions to ensure proper focus on Windows
+        cv2.moveWindow(self.win_name, 100, 100)
+        cv2.moveWindow(self.info_win, 700, 100)
         
     def _get_background_paths(self, initial_path):
         """Get list of background image paths."""
@@ -225,8 +229,12 @@ class GreenScreenVR:
 
                 cv2.imshow(self.win_name, display_frame)
                 cv2.imshow(self.info_win, info)
+                
+                # Ensure window focus for proper key capture on Windows
+                cv2.setWindowProperty(self.win_name, cv2.WND_PROP_TOPMOST, 1)
+                cv2.setWindowProperty(self.win_name, cv2.WND_PROP_TOPMOST, 0)
 
-                key = cv2.waitKey(1) & 0xFF
+                key = cv2.waitKey(30) & 0xFF
                 if key == ord('g'):
                     self.toggle_green_screen()
                 elif key == ord('f'):
