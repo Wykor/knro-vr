@@ -56,9 +56,9 @@ class GreenScreenVR:
         cv2.namedWindow(self.win_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         cv2.namedWindow(self.info_win, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         
-        # Set window positions to ensure proper focus on Windows
+        # Set window positions - info window on side screen
         cv2.moveWindow(self.win_name, 100, 100)
-        cv2.moveWindow(self.info_win, 700, 100)
+        cv2.moveWindow(self.info_win, self.screen_width + 100, 100)
         
     def _get_background_paths(self, initial_path):
         """Get list of background image paths."""
@@ -229,12 +229,15 @@ class GreenScreenVR:
 
                 cv2.imshow(self.win_name, display_frame)
                 cv2.imshow(self.info_win, info)
-                
-                # Ensure window focus for proper key capture on Windows
-                cv2.setWindowProperty(self.win_name, cv2.WND_PROP_TOPMOST, 1)
-                cv2.setWindowProperty(self.win_name, cv2.WND_PROP_TOPMOST, 0)
 
+                # Check for key presses on both windows
                 key = cv2.waitKey(30) & 0xFF
+                
+                # Also check if any window has focus and capture key from both
+                if key == 255:  # No key pressed, try checking window focus
+                    cv2.setWindowProperty(self.info_win, cv2.WND_PROP_TOPMOST, 1)
+                    cv2.setWindowProperty(self.info_win, cv2.WND_PROP_TOPMOST, 0)
+                    key = cv2.waitKey(1) & 0xFF
                 if key == ord('g'):
                     self.toggle_green_screen()
                 elif key == ord('f'):
