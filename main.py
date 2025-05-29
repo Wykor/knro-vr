@@ -14,6 +14,7 @@ class GreenScreenVR:
         g - toggle green screen replacement
         f - toggle full-screen video display
         b - switch background
+        e - toggle example image/camera
         c - take photo
         q - quit
     """
@@ -41,6 +42,9 @@ class GreenScreenVR:
         # Toggles
         self.use_green_screen = True
         self.full_screen = False
+        self.use_example_image = False
+        self.example_image = None
+        self._load_example_image()
 
         # FPS calculation
         self.prev_time = time.time()
@@ -113,6 +117,17 @@ class GreenScreenVR:
             self.background = cv2.imread(bg_path)
             if self.background is None:
                 raise RuntimeError(f"Cannot load image background: {bg_path}")
+    
+    def _load_example_image(self):
+        """Load example.png if it exists."""
+        if os.path.exists("example.png"):
+            self.example_image = cv2.imread("example.png")
+            if self.example_image is not None:
+                print("Loaded example.png")
+            else:
+                print("Warning: Could not load example.png")
+        else:
+            print("No example.png found")
         
     def _create_session_folder(self):
         """Create a unique session folder for this run."""
@@ -203,13 +218,15 @@ class GreenScreenVR:
         current_bg_name = os.path.basename(self.background_paths[self.current_bg_index])
         
         bg_type = "VIDEO" if self.is_video_background else "IMAGE"
+        input_source = "EXAMPLE" if self.use_example_image else "CAMERA"
         text_lines = [
             f"FPS: {self.fps:.1f}",
+            f"Input: {input_source}",
             f"Green Screen: {'ON' if self.use_green_screen else 'OFF'}",
             f"Fullscreen: {'ON' if self.full_screen else 'OFF'}",
             f"Background: {current_bg_name} [{bg_type}] ({self.current_bg_index + 1}/{len(self.background_paths)})",
             f"Photos Captured: {self.photo_count} (Session: {os.path.basename(self.session_folder)})",
-            "'g' toggle, 'f' fullscreen, 'b' background, 'c' photo, 'q'/ESC quit",
+            "'g' toggle, 'f' fullscreen, 'b' background, 'e' example, 'c' photo, 'q'/ESC quit",
         ]
         y0, dy = 30, 30
         for i, text in enumerate(text_lines):
@@ -242,17 +259,28 @@ class GreenScreenVR:
         cv2.setWindowProperty(self.win_name, cv2.WND_PROP_FULLSCREEN,
                               cv2.WINDOW_FULLSCREEN if self.full_screen else cv2.WINDOW_NORMAL)
 
+    def toggle_example_image(self):
+        """Toggle between live camera and example image."""
+        if self.example_image is not None:
+            self.use_example_image = not self.use_example_image
+        else:
+            print("No example image available")
+
     def run(self):
         """Main loop: capture, process, display, handle input."""
         try:
             while True:
-                ret, frame = self.cap.read()
-                if not ret:
-                    print("Failed to grab frame")
-                    break
-
-                # Mirror the frame horizontally for more intuitive self-viewing
-                frame = cv2.flip(frame, 1)
+                if self.use_example_image and self.example_image is not None:
+                    # Use example image instead of camera
+                    frame = self.example_image.copy()
+                else:
+                    # Use live camera feed
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        print("Failed to grab frame")
+                        break
+                    # Mirror the frame horizontally for more intuitive self-viewing
+                    frame = cv2.flip(frame, 1)
 
                 self._calculate_fps()
                 processed = self.process_frame(frame)
@@ -293,6 +321,9 @@ class GreenScreenVR:
                     print("Switched background")
                 elif key == ord('c') or key == ord('C'):
                     self.take_photo(processed)
+                elif key == ord('e') or key == ord('E'):
+                    self.toggle_example_image()
+                    print("Toggled example image")
                 elif key == ord('q') or key == ord('Q') or key == 27:  # ESC key
                     print("Quitting...")
                     break
