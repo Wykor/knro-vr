@@ -14,7 +14,7 @@ class GreenScreenVR:
         g - toggle green screen replacement
         f - toggle full-screen video display
         b - switch background
-        e - toggle example image/camera
+        e - toggle photo cycling/camera
         c - take photo
         n - create new session folder
         q - quit
@@ -45,7 +45,12 @@ class GreenScreenVR:
         self.full_screen = False
         self.use_example_image = False
         self.example_image = None
+        self.photo_cycle_images = []
+        self.current_photo_index = 0
+        self.last_photo_switch_time = time.time()
+        self.photo_cycle_interval = 5.0  # 5 seconds
         self._load_example_image()
+        self._load_photo_cycle_images()
 
         # FPS calculation
         self.prev_time = time.time()
@@ -129,6 +134,49 @@ class GreenScreenVR:
                 print("Warning: Could not load example.png")
         else:
             print("No example.png found")
+    
+    def _load_photo_cycle_images(self):
+        """Load all photos from the photos directory for cycling."""
+        self.photo_cycle_images = []
+        photos_dir = "photos"
+        
+        if os.path.exists(photos_dir):
+            # Get all session folders
+            session_folders = [f for f in os.listdir(photos_dir) 
+                             if os.path.isdir(os.path.join(photos_dir, f)) and f.startswith("session_")]
+            
+            # Collect all photos from all sessions
+            for session_folder in session_folders:
+                session_path = os.path.join(photos_dir, session_folder)
+                photo_files = glob.glob(os.path.join(session_path, "photo_*.jpg"))
+                
+                for photo_file in photo_files:
+                    img = cv2.imread(photo_file)
+                    if img is not None:
+                        self.photo_cycle_images.append(img)
+            
+            if self.photo_cycle_images:
+                print(f"Loaded {len(self.photo_cycle_images)} photos for cycling")
+            else:
+                print("No photos found for cycling")
+        else:
+            print("No photos directory found")
+    
+    def _get_current_cycle_image(self):
+        """Get the current image from the photo cycle."""
+        if not self.photo_cycle_images:
+            # Reload photos in case new ones were added
+            self._load_photo_cycle_images()
+            if not self.photo_cycle_images:
+                return self.example_image
+        
+        # Check if it's time to switch to the next photo
+        current_time = time.time()
+        if current_time - self.last_photo_switch_time >= self.photo_cycle_interval:
+            self.current_photo_index = (self.current_photo_index + 1) % len(self.photo_cycle_images)
+            self.last_photo_switch_time = current_time
+        
+        return self.photo_cycle_images[self.current_photo_index]
         
     def _create_session_folder(self):
         """Create a unique session folder for this run."""
@@ -219,7 +267,13 @@ class GreenScreenVR:
         current_bg_name = os.path.basename(self.background_paths[self.current_bg_index])
         
         bg_type = "VIDEO" if self.is_video_background else "IMAGE"
-        input_source = "EXAMPLE" if self.use_example_image else "CAMERA"
+        if self.use_example_image:
+            if self.photo_cycle_images:
+                input_source = f"PHOTOS ({self.current_photo_index + 1}/{len(self.photo_cycle_images)})"
+            else:
+                input_source = "EXAMPLE"
+        else:
+            input_source = "CAMERA"
         text_lines = [
             f"FPS: {self.fps:.1f}",
             f"Input: {input_source}",
@@ -227,7 +281,7 @@ class GreenScreenVR:
             f"Fullscreen: {'ON' if self.full_screen else 'OFF'}",
             f"Background: {current_bg_name} [{bg_type}] ({self.current_bg_index + 1}/{len(self.background_paths)})",
             f"Photos Captured: {self.photo_count} (Session: {os.path.basename(self.session_folder)})",
-            "'g' toggle, 'f' fullscreen, 'b' background, 'e' example, 'c' photo, 'n' new session, 'q'/ESC quit",
+            "'g' toggle, 'f' fullscreen, 'b' background, 'e' photos, 'c' photo, 'n' new session, 'q'/ESC quit",
         ]
         y0, dy = 30, 30
         for i, text in enumerate(text_lines):
@@ -261,11 +315,11 @@ class GreenScreenVR:
                               cv2.WINDOW_FULLSCREEN if self.full_screen else cv2.WINDOW_NORMAL)
 
     def toggle_example_image(self):
-        """Toggle between live camera and example image."""
-        if self.example_image is not None:
-            self.use_example_image = not self.use_example_image
-        else:
-            print("No example image available")
+        """Toggle between live camera and photo cycling."""
+        self.use_example_image = not self.use_example_image
+        if self.use_example_image:
+            # Reload photos when switching to example mode
+            self._load_photo_cycle_images()
 
     def create_new_session(self):
         """Create a new session folder and reset photo count."""
@@ -278,9 +332,10 @@ class GreenScreenVR:
         """Main loop: capture, process, display, handle input."""
         try:
             while True:
-                if self.use_example_image and self.example_image is not None:
-                    # Use example image instead of camera
-                    frame = self.example_image.copy()
+                if self.use_example_image:
+                    # Use cycling photos instead of camera
+                    cycle_image = self._get_current_cycle_image()
+                    frame = cycle_image.copy() if cycle_image is not None else self.example_image.copy()
                 else:
                     # Use live camera feed
                     ret, frame = self.cap.read()
@@ -331,7 +386,7 @@ class GreenScreenVR:
                     self.take_photo(processed)
                 elif key == ord('e') or key == ord('E'):
                     self.toggle_example_image()
-                    print("Toggled example image")
+                    print("Toggled photo cycling")
                 elif key == ord('n') or key == ord('N'):
                     self.create_new_session()
                 elif key == ord('q') or key == ord('Q') or key == 27:  # ESC key
