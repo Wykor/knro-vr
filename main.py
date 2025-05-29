@@ -24,10 +24,13 @@ class GreenScreenVR:
         if not self.cap.isOpened():
             raise RuntimeError(f"Cannot open camera index {camera_index}")
 
-        # Load background images
+        # Load background images/videos
         self.background_paths = self._get_background_paths(background_path)
         self.current_bg_index = 0
-        self.background = self._load_current_background()
+        self.background = None
+        self.background_cap = None
+        self.is_video_background = False
+        self._load_current_background()
         
         # Photo capture setup
         self.captured_photo = None
@@ -71,7 +74,7 @@ class GreenScreenVR:
         # Add backgrounds from folder
         bg_folder = "backgrounds"
         if os.path.exists(bg_folder):
-            patterns = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
+            patterns = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.mp4", "*.avi", "*.mov", "*.mkv", "*.webm"]
             for pattern in patterns:
                 backgrounds.extend(glob.glob(os.path.join(bg_folder, pattern)))
                 
@@ -85,12 +88,31 @@ class GreenScreenVR:
         return sorted(backgrounds)
     
     def _load_current_background(self):
-        """Load the currently selected background."""
+        """Load the currently selected background (image or video)."""
         bg_path = self.background_paths[self.current_bg_index]
-        bg = cv2.imread(bg_path)
-        if bg is None:
-            raise RuntimeError(f"Cannot load background: {bg_path}")
-        return bg
+        
+        # Close previous video if any
+        if self.background_cap is not None:
+            self.background_cap.release()
+            self.background_cap = None
+        
+        # Check if it's a video file
+        video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+        if any(bg_path.lower().endswith(ext) for ext in video_extensions):
+            self.is_video_background = True
+            self.background_cap = cv2.VideoCapture(bg_path)
+            if not self.background_cap.isOpened():
+                raise RuntimeError(f"Cannot load video background: {bg_path}")
+            # Read first frame as default background
+            ret, frame = self.background_cap.read()
+            if not ret:
+                raise RuntimeError(f"Cannot read first frame from video: {bg_path}")
+            self.background = frame
+        else:
+            self.is_video_background = False
+            self.background = cv2.imread(bg_path)
+            if self.background is None:
+                raise RuntimeError(f"Cannot load image background: {bg_path}")
         
     def _create_session_folder(self):
         """Create a unique session folder for this run."""
@@ -120,9 +142,9 @@ class GreenScreenVR:
                     self.photo_count = len(photo_files)
             
     def switch_background(self):
-        """Switch to the next background image."""
+        """Switch to the next background image/video."""
         self.current_bg_index = (self.current_bg_index + 1) % len(self.background_paths)
-        self.background = self._load_current_background()
+        self._load_current_background()
         
     def take_photo(self, frame):
         """Capture and save the current frame with timestamp."""
@@ -142,19 +164,30 @@ class GreenScreenVR:
         self.prev_time = current_time
         self.fps = 1.0 / dt if dt > 0 else 0.0
 
-    def _resize_background(self, frame_shape):
-        """Resize cached background to match incoming frame size."""
+    def _get_current_background_frame(self, frame_shape):
+        """Get current background frame (update video if needed) and resize to match frame size."""
+        if self.is_video_background and self.background_cap is not None:
+            ret, frame = self.background_cap.read()
+            if not ret:
+                # Loop video by resetting to beginning
+                self.background_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = self.background_cap.read()
+                if ret:
+                    self.background = frame
+            else:
+                self.background = frame
+        
         return cv2.resize(self.background, (frame_shape[1], frame_shape[0]))
 
     def _apply_chroma_key(self, frame):
-        """Replace green screen with the loaded background image."""
+        """Replace green screen with the loaded background image/video."""
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         lower_green = np.array([35, 80, 40])
         upper_green = np.array([85, 255, 255])
         mask = cv2.inRange(hsv, lower_green, upper_green)
         mask_inv = cv2.bitwise_not(mask)
 
-        bg_resized = self._resize_background(frame.shape)
+        bg_resized = self._get_current_background_frame(frame.shape)
         fg = cv2.bitwise_and(frame, frame, mask=mask_inv)
         bg = cv2.bitwise_and(bg_resized, bg_resized, mask=mask)
         return cv2.add(fg, bg)
@@ -169,11 +202,12 @@ class GreenScreenVR:
         info_frame = frame.copy()
         current_bg_name = os.path.basename(self.background_paths[self.current_bg_index])
         
+        bg_type = "VIDEO" if self.is_video_background else "IMAGE"
         text_lines = [
             f"FPS: {self.fps:.1f}",
             f"Green Screen: {'ON' if self.use_green_screen else 'OFF'}",
             f"Fullscreen: {'ON' if self.full_screen else 'OFF'}",
-            f"Background: {current_bg_name} ({self.current_bg_index + 1}/{len(self.background_paths)})",
+            f"Background: {current_bg_name} [{bg_type}] ({self.current_bg_index + 1}/{len(self.background_paths)})",
             f"Photos Captured: {self.photo_count} (Session: {os.path.basename(self.session_folder)})",
             "'g' toggle, 'f' fullscreen, 'b' background, 'c' photo, 'q'/ESC quit",
         ]
@@ -261,6 +295,8 @@ class GreenScreenVR:
                     break
         finally:
             self.cap.release()
+            if self.background_cap is not None:
+                self.background_cap.release()
             cv2.destroyAllWindows()
 
 
