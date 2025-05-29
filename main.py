@@ -16,6 +16,7 @@ class GreenScreenVR:
         b - switch background
         e - toggle example image/camera
         c - take photo
+        n - create new session folder
         q - quit
     """
 
@@ -226,7 +227,7 @@ class GreenScreenVR:
             f"Fullscreen: {'ON' if self.full_screen else 'OFF'}",
             f"Background: {current_bg_name} [{bg_type}] ({self.current_bg_index + 1}/{len(self.background_paths)})",
             f"Photos Captured: {self.photo_count} (Session: {os.path.basename(self.session_folder)})",
-            "'g' toggle, 'f' fullscreen, 'b' background, 'e' example, 'c' photo, 'q'/ESC quit",
+            "'g' toggle, 'f' fullscreen, 'b' background, 'e' example, 'c' photo, 'n' new session, 'q'/ESC quit",
         ]
         y0, dy = 30, 30
         for i, text in enumerate(text_lines):
@@ -265,6 +266,13 @@ class GreenScreenVR:
             self.use_example_image = not self.use_example_image
         else:
             print("No example image available")
+
+    def create_new_session(self):
+        """Create a new session folder and reset photo count."""
+        self.session_folder = self._create_session_folder()
+        self.photo_count = 0
+        self.captured_photo = None
+        print(f"Created new session: {os.path.basename(self.session_folder)}")
 
     def run(self):
         """Main loop: capture, process, display, handle input."""
@@ -324,6 +332,8 @@ class GreenScreenVR:
                 elif key == ord('e') or key == ord('E'):
                     self.toggle_example_image()
                     print("Toggled example image")
+                elif key == ord('n') or key == ord('N'):
+                    self.create_new_session()
                 elif key == ord('q') or key == ord('Q') or key == 27:  # ESC key
                     print("Quitting...")
                     break
