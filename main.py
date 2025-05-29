@@ -251,6 +251,9 @@ class GreenScreenVR:
                     print("Failed to grab frame")
                     break
 
+                # Mirror the frame horizontally for more intuitive self-viewing
+                frame = cv2.flip(frame, 1)
+
                 self._calculate_fps()
                 processed = self.process_frame(frame)
 
